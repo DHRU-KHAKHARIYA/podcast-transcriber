@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Podcast Transcriber — Detail</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <nav class="navbar">
+    <span class="navbar-brand">🎙 Podcast Transcriber</span>
+    <div class="navbar-right">
+      <span id="nav-username"></span>
+      <button class="btn btn-ghost btn-sm" id="signout-btn">Sign out</button>
+    </div>
+  </nav>
+
+  <div class="main-content">
+    <div class="detail-header">
+      <button class="btn btn-ghost btn-sm" onclick="history.back()">← Back</button>
+      <h1 id="detail-filename" style="font-size:1.1rem; font-weight:600;"></h1>
+    </div>
+
+    <div class="detail-meta" id="detail-meta"></div>
+
+    <div class="section-title">Transcript</div>
+    <div class="transcript" id="transcript"></div>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
