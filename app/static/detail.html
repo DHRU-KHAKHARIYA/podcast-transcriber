@@ -21,10 +21,22 @@
       <h1 id="detail-filename" style="font-size:1.1rem; font-weight:600;"></h1>
     </div>
 
-    <div class="detail-meta" id="detail-meta"></div>
+    <div class="audio-card">
+      <div class="audio-load" id="audio-load">
+        <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M9 18V6l12-2v12"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+        <span>Load your audio file to listen along</span>
+        <label class="btn btn-ghost btn-sm" for="audio-file-input">Browse file</label>
+        <input type="file" id="audio-file-input" accept="audio/*" style="display:none" />
+      </div>
+      <audio id="audio-player" controls class="hidden"></audio>
+    </div>
+
+    <div id="speakers-panel"></div>
 
     <div class="section-title">Transcript</div>
     <div class="transcript" id="transcript"></div>
+
+    <div class="detail-meta" id="detail-meta"></div>
   </div>
 
   <script src="/static/app.js"></script>

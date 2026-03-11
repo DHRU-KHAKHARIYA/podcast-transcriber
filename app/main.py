@@ -1,5 +1,6 @@
 import json
 import os
+import subprocess
 import tempfile
 from contextlib import asynccontextmanager
 from typing import List, Optional
@@ -14,8 +15,11 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from app.align import assign_speakers
 from app.auth import create_access_token, get_current_user, hash_password, verify_password
 from app.database import Transcription, User, create_tables, get_db
+from app.diarization import diarize
+from app.speaker_constraint import constrain_speakers
 from app.transcription import transcribe
 
 
@@ -213,22 +217,40 @@ async def transcribe_audio(
         tmp.write(await file.read())
         tmp_path = tmp.name
 
+    # Convert to 16kHz mono WAV so both torchaudio and faster-whisper
+    # receive a format that works without torchcodec.
+    wav_path = tmp_path + ".wav"
     try:
-        transcript_segments = transcribe(tmp_path)
-        segments = [
-            SegmentResponse(
-                speaker="SPEAKER",
-                start=round(seg.start, 3),
-                end=round(seg.end, 3),
-                text=seg.text,
-            )
-            for seg in transcript_segments
-        ]
-        duration = max((s.end for s in transcript_segments), default=None)
+        subprocess.run(
+            ["ffmpeg", "-y", "-i", tmp_path, "-ar", "16000", "-ac", "1", wav_path],
+            check=True,
+            capture_output=True,
+        )
+    except subprocess.CalledProcessError as exc:
+        os.unlink(tmp_path)
+        raise HTTPException(status_code=500, detail=f"Audio conversion failed: {exc.stderr.decode()}")
+
+    try:
+        # Step 1: diarize — identify who spoke when
+        diarization, embeddings = diarize(wav_path)
+
+        # Step 2: constrain to the requested speaker count
+        diarization = constrain_speakers(diarization, embeddings, number_of_speakers)
+
+        # Step 3: transcribe — get text + timestamps
+        transcript_segments = transcribe(wav_path)
+
+        # Step 4: assign each text segment to its speaker by max time-overlap
+        aligned = assign_speakers(transcript_segments, diarization)
+        segments = [SegmentResponse(**s) for s in aligned]
+
+        duration = max((s["end"] for s in aligned), default=None)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
     finally:
         os.unlink(tmp_path)
+        if os.path.exists(wav_path):
+            os.unlink(wav_path)
 
     record = Transcription(
         user_id=current_user.id,

@@ -221,12 +221,11 @@ if (document.getElementById("drop-zone")) {
     }
     tbody.innerHTML = list.map(r => `
       <tr>
-        <td>${escHtml(r.filename)}</td>
+        <td><a class="filename-link" href="/static/detail.html?id=${r.id}">${escHtml(r.filename.replace(/\.[^.]+$/, ""))}</a></td>
         <td>${r.number_of_speakers}</td>
         <td>${fmtDuration(r.duration_seconds)}</td>
         <td>${fmtDate(r.created_at)}</td>
         <td class="actions">
-          <button class="btn btn-ghost btn-sm" onclick="viewDetail(${r.id})">View</button>
           <button class="btn btn-danger" onclick="deleteTranscription(${r.id})">Delete</button>
         </td>
       </tr>
@@ -265,8 +264,18 @@ if (document.getElementById("transcript")) {
     if (!res || !res.ok) { window.location.href = "/static/dashboard.html"; return; }
     const data = await res.json();
 
-    document.title = `${data.filename} — Podcast Transcriber`;
-    document.getElementById("detail-filename").textContent = data.filename;
+    const displayName = data.filename.replace(/\.[^.]+$/, "");
+    document.title = `${displayName} — Podcast Transcriber`;
+    document.getElementById("detail-filename").textContent = displayName;
+
+    document.getElementById("audio-file-input").addEventListener("change", function () {
+      const file = this.files[0];
+      if (!file) return;
+      const player = document.getElementById("audio-player");
+      player.src = URL.createObjectURL(file);
+      player.classList.remove("hidden");
+      document.getElementById("audio-load").classList.add("hidden");
+    });
 
     document.getElementById("detail-meta").innerHTML = `
       <div class="meta-item"><div class="meta-label">Speakers</div><div class="meta-value">${data.number_of_speakers}</div></div>
@@ -282,10 +291,38 @@ if (document.getElementById("transcript")) {
     }
     transcriptEl.innerHTML = data.segments.map(s => `
       <div class="segment">
-        <div class="segment-meta">${escHtml(s.speaker)} &nbsp;·&nbsp; [${fmtTimestamp(s.start)} – ${fmtTimestamp(s.end)}]</div>
-        <div class="segment-text">${escHtml(s.text)}</div>
+        <div class="segment-meta">
+          <span class="segment-speaker" data-speaker="${escHtml(s.speaker)}">${escHtml(s.speaker)}</span>
+          &nbsp;·&nbsp; <span class="segment-time">${fmtTimestamp(s.start)} – ${fmtTimestamp(s.end)}</span>
+        </div>
+        <div class="segment-text" contenteditable="true" spellcheck="false">${escHtml(s.text)}</div>
       </div>
     `).join("");
+
+    const speakers = [...new Set(data.segments.map(s => s.speaker))].sort();
+    const panel = document.getElementById("speakers-panel");
+    panel.innerHTML = `
+      <div class="speakers-panel">
+        <div class="speakers-panel-label">Rename speakers</div>
+        <div class="speakers-panel-inputs">
+          ${speakers.map(s => `
+            <div class="speaker-chip">
+              <div class="speaker-chip-tag">${escHtml(s)}</div>
+              <input class="speaker-name-input" type="text" placeholder="Enter name…" data-speaker="${escHtml(s)}" />
+            </div>
+          `).join("")}
+        </div>
+      </div>
+    `;
+    panel.querySelectorAll(".speaker-name-input").forEach(input => {
+      input.addEventListener("input", function () {
+        const original = this.dataset.speaker;
+        const name = this.value.trim() || original;
+        document.querySelectorAll(`.segment-speaker[data-speaker="${original}"]`).forEach(el => {
+          el.textContent = name;
+        });
+      });
+    });
   });
 }
 

@@ -2,9 +2,9 @@ import os
 from typing import Dict, Optional, Tuple
 
 import numpy as np
+import soundfile as sf
 import torch
-import torchaudio
-from pyannote.audio import Inference, Pipeline
+from pyannote.audio import Pipeline
 from pyannote.core import Annotation
 
 _pipeline: Optional[Pipeline] = None
@@ -30,32 +30,34 @@ def diarize(audio_path: str) -> Tuple[Annotation, Dict[str, np.ndarray]]:
                     May be empty if embedding extraction fails.
     """
     pipeline = get_pipeline()
-    diarization: Annotation = pipeline(audio_path)
 
+    # Use soundfile to load audio — avoids torchaudio's torchcodec dependency
+    # entirely. Input is always a 16kHz mono WAV at this point.
+    data, sample_rate = sf.read(audio_path, dtype="float32", always_2d=True)
+    # soundfile returns (samples, channels); pyannote expects (channels, samples)
+    waveform = torch.from_numpy(data.T)
+    audio_input = {"waveform": waveform, "sample_rate": sample_rate}
+
+    result = pipeline(audio_input)
+
+    # pyannote.audio 4.x returns DiarizeOutput; 3.x returned Annotation directly.
+    if hasattr(result, "speaker_diarization"):
+        diarization: Annotation = result.speaker_diarization
+        raw_embeddings = result.speaker_embeddings  # shape (num_speakers, dim) or None
+    else:
+        diarization = result
+        raw_embeddings = None
+
+    # Build speaker label -> embedding dict.
+    # DiarizeOutput.speaker_embeddings rows align with sorted speaker labels.
     embeddings: Dict[str, np.ndarray] = {}
     try:
-        embedding_model = pipeline.embedding
-        inference = Inference(embedding_model, window="whole")
-
-        waveform, sample_rate = torchaudio.load(audio_path)
-        audio_file = {"waveform": waveform, "sample_rate": sample_rate}
-
-        for speaker in diarization.labels():
-            speaker_timeline = diarization.label_timeline(speaker)
-            speaker_embs = []
-            for seg in speaker_timeline:
-                try:
-                    emb = inference.crop(audio_file, seg)
-                    if isinstance(emb, torch.Tensor):
-                        emb = emb.detach().numpy()
-                    if emb is not None and np.ndim(emb) >= 1:
-                        speaker_embs.append(np.array(emb).flatten())
-                except Exception:
-                    pass
-            if speaker_embs:
-                embeddings[speaker] = np.mean(speaker_embs, axis=0)
+        if raw_embeddings is not None and len(raw_embeddings) > 0:
+            speakers = sorted(diarization.labels())
+            for i, speaker in enumerate(speakers):
+                if i < len(raw_embeddings):
+                    embeddings[speaker] = np.array(raw_embeddings[i]).flatten()
     except Exception:
-        # Embedding extraction is best-effort; constraint layer skips merging when empty.
         pass
 
     return diarization, embeddings
