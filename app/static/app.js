@@ -547,6 +547,14 @@ if (document.getElementById("transcript")) {
       setTimeout(() => { btn.textContent = "Copy"; btn.style.color = ""; }, 2000);
     });
 
+    // Ctrl+S to save
+    window.addEventListener("keydown", e => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+        e.preventDefault();
+        document.getElementById("save-btn").click();
+      }
+    });
+
     // Save edits
     document.getElementById("save-btn").addEventListener("click", async () => {
       const saveBtn = document.getElementById("save-btn");
