@@ -434,7 +434,7 @@ if (document.getElementById("transcript")) {
           ${speakers.map(s => `
             <div class="speaker-chip" data-sp="${speakerColorIdx[s] ?? 0}">
               <div class="speaker-chip-tag">${escHtml(s)}</div>
-              <input class="speaker-name-input" type="text" placeholder="Enter name…" data-speaker="${escHtml(s)}" />
+              <input class="speaker-name-input" type="text" value="${escHtml(s)}" data-speaker="${escHtml(s)}" />
             </div>
           `).join("")}
         </div>
@@ -446,7 +446,9 @@ if (document.getElementById("transcript")) {
         const name = this.value.trim() || original;
         document.querySelectorAll(`.segment-speaker[data-speaker="${original}"]`).forEach(el => {
           el.textContent = name;
+          el.dataset.speaker = name;
         });
+        this.dataset.speaker = name;
       });
     });
 
@@ -458,6 +460,72 @@ if (document.getElementById("transcript")) {
         end: parseFloat(seg.dataset.end),
         text: seg.querySelector(".segment-text").textContent.trim(),
       }));
+    }
+
+    // Search
+    const searchToggle = document.getElementById("search-toggle");
+    const searchBar = document.getElementById("search-bar");
+    const searchInput = document.getElementById("search-input");
+    const searchCount = document.getElementById("search-count");
+    let searchMatches = [], searchIdx = 0;
+
+    searchToggle.addEventListener("click", () => {
+      const hidden = searchBar.classList.toggle("hidden");
+      if (!hidden) { searchInput.focus(); }
+      else { clearSearch(); }
+    });
+
+    document.getElementById("search-close").addEventListener("click", () => {
+      searchBar.classList.add("hidden");
+      clearSearch();
+    });
+
+    searchInput.addEventListener("keydown", e => {
+      if (e.key === "Escape") { searchBar.classList.add("hidden"); clearSearch(); }
+      if (e.key === "Enter") { e.shiftKey ? stepSearch(-1) : stepSearch(1); }
+    });
+
+    searchInput.addEventListener("input", () => runSearch(searchInput.value.trim()));
+
+    function clearSearch() {
+      searchInput.value = "";
+      searchMatches = [];
+      searchIdx = 0;
+      searchCount.textContent = "";
+      transcriptEl.querySelectorAll(".segment").forEach(s => {
+        s.classList.remove("search-match", "search-current", "search-dim");
+      });
+    }
+
+    function runSearch(query) {
+      const segs = [...transcriptEl.querySelectorAll(".segment")];
+      if (!query) { clearSearch(); return; }
+      const q = query.toLowerCase();
+      searchMatches = [];
+      segs.forEach(seg => {
+        const text = seg.querySelector(".segment-text").textContent.toLowerCase();
+        const speaker = seg.querySelector(".segment-speaker").textContent.toLowerCase();
+        const match = text.includes(q) || speaker.includes(q);
+        seg.classList.toggle("search-match", match);
+        seg.classList.toggle("search-dim", !match);
+        seg.classList.remove("search-current");
+        if (match) searchMatches.push(seg);
+      });
+      searchIdx = 0;
+      if (searchMatches.length) {
+        searchMatches[0].classList.add("search-current");
+        searchMatches[0].scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+      searchCount.textContent = searchMatches.length ? `1 of ${searchMatches.length}` : "No results";
+    }
+
+    function stepSearch(dir) {
+      if (!searchMatches.length) return;
+      searchMatches[searchIdx].classList.remove("search-current");
+      searchIdx = (searchIdx + dir + searchMatches.length) % searchMatches.length;
+      searchMatches[searchIdx].classList.add("search-current");
+      searchMatches[searchIdx].scrollIntoView({ behavior: "smooth", block: "center" });
+      searchCount.textContent = `${searchIdx + 1} of ${searchMatches.length}`;
     }
 
     // Unsaved changes warning

@@ -42,6 +42,7 @@
     <div class="transcript-toolbar">
       <div class="section-title">Transcript</div>
       <div class="transcript-actions">
+        <button class="btn btn-ghost btn-sm" id="search-toggle">Search</button>
         <button class="btn btn-ghost btn-sm" id="autoscroll-btn" title="Toggle auto-scroll">Auto-scroll: Off</button>
         <button class="btn btn-ghost btn-sm" id="copy-btn">Copy</button>
         <button class="btn btn-ghost btn-sm" id="save-btn">Save edits</button>
@@ -54,6 +55,14 @@
         </div>
       </div>
     </div>
+
+    <div class="search-bar hidden" id="search-bar">
+      <input type="text" id="search-input" placeholder="Search transcript…" />
+      <span class="search-count" id="search-count"></span>
+      <span style="font-size:0.75rem;color:var(--text-muted)">Enter ↓ · Shift+Enter ↑</span>
+      <button class="search-close" id="search-close">✕</button>
+    </div>
+
     <div class="transcript" id="transcript"></div>
 
     <div class="detail-meta" id="detail-meta"></div>
