@@ -28,7 +28,13 @@
         <label class="btn btn-ghost btn-sm" for="audio-file-input">Browse file</label>
         <input type="file" id="audio-file-input" accept="audio/*" style="display:none" />
       </div>
-      <audio id="audio-player" controls class="hidden"></audio>
+      <div id="audio-player-wrap" class="hidden">
+        <audio id="audio-player" controls></audio>
+        <button class="audio-remove-btn" id="audio-remove-btn" title="Remove audio">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          Change file
+        </button>
+      </div>
     </div>
 
     <div id="speakers-panel"></div>

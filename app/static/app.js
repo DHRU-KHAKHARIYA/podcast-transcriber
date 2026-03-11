@@ -268,13 +268,26 @@ if (document.getElementById("transcript")) {
     document.title = `${displayName} — Podcast Transcriber`;
     document.getElementById("detail-filename").textContent = displayName;
 
+    const audioLoad = document.getElementById("audio-load");
+    const audioWrap = document.getElementById("audio-player-wrap");
+    const audioPlayer = document.getElementById("audio-player");
+
     document.getElementById("audio-file-input").addEventListener("change", function () {
       const file = this.files[0];
       if (!file) return;
-      const player = document.getElementById("audio-player");
-      player.src = URL.createObjectURL(file);
-      player.classList.remove("hidden");
-      document.getElementById("audio-load").classList.add("hidden");
+      if (audioPlayer.src) URL.revokeObjectURL(audioPlayer.src);
+      audioPlayer.src = URL.createObjectURL(file);
+      audioLoad.classList.add("hidden");
+      audioWrap.classList.remove("hidden");
+    });
+
+    document.getElementById("audio-remove-btn").addEventListener("click", function () {
+      audioPlayer.pause();
+      URL.revokeObjectURL(audioPlayer.src);
+      audioPlayer.src = "";
+      document.getElementById("audio-file-input").value = "";
+      audioWrap.classList.add("hidden");
+      audioLoad.classList.remove("hidden");
     });
 
     document.getElementById("detail-meta").innerHTML = `

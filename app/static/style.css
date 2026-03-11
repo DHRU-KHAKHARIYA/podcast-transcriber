@@ -371,11 +371,37 @@ tbody td {
   color: var(--accent-light);
 }
 
+#audio-player-wrap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 #audio-player {
-  width: 100%;
+  flex: 1;
   height: 44px;
   border-radius: var(--radius-sm);
   accent-color: var(--accent);
+}
+
+.audio-remove-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  padding: 6px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.audio-remove-btn:hover {
+  border-color: var(--text-muted);
+  color: var(--text);
 }
 
 .detail-meta {
