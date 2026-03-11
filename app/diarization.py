@@ -18,6 +18,8 @@ def get_pipeline() -> Pipeline:
             "pyannote/speaker-diarization-3.1",
             token=token,
         )
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        _pipeline.to(device)
     return _pipeline
 
 

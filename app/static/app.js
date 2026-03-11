@@ -149,10 +149,21 @@ if (document.getElementById("drop-zone")) {
   const fileNameEl = document.getElementById("selected-filename");
   let selectedFile = null;
 
+  const dropZoneIcon = document.getElementById("drop-zone-icon");
+  const dropZoneFilename = document.getElementById("drop-zone-filename");
+
   function setFile(f) {
     selectedFile = f;
-    fileNameEl.textContent = f ? "Selected: " + f.name : "";
     transcribeBtn.disabled = !f;
+    if (f) {
+      dropZone.classList.add("has-file");
+      dropZoneIcon.textContent = "✅";
+      dropZoneFilename.textContent = f.name;
+    } else {
+      dropZone.classList.remove("has-file");
+      dropZoneIcon.textContent = "📂";
+      dropZoneFilename.textContent = "";
+    }
   }
 
   document.getElementById("browse-link").addEventListener("click", e => {

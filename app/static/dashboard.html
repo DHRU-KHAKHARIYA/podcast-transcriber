@@ -19,10 +19,11 @@
     <!-- Upload -->
     <div class="upload-panel card">
       <div class="drop-zone" id="drop-zone">
-        <div class="drop-zone-icon">📂</div>
+        <div class="drop-zone-icon" id="drop-zone-icon">📂</div>
         <div class="drop-zone-label">
           Drop an audio file here, or <span id="browse-link">browse</span>
         </div>
+        <div class="drop-zone-filename" id="drop-zone-filename"></div>
         <input type="file" id="file-input" accept="audio/*" />
       </div>
       <div id="selected-filename"></div>

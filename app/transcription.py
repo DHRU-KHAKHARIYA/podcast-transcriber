@@ -2,6 +2,7 @@ import os
 from dataclasses import dataclass
 from typing import List, Optional
 
+import torch
 from faster_whisper import WhisperModel
 
 
@@ -19,8 +20,8 @@ def get_model() -> WhisperModel:
     global _model
     if _model is None:
         model_size = os.environ.get("WHISPER_MODEL", "base")
-        device = os.environ.get("WHISPER_DEVICE", "cpu")
-        compute_type = os.environ.get("WHISPER_COMPUTE_TYPE", "int8")
+        device = os.environ.get("WHISPER_DEVICE", "cuda" if torch.cuda.is_available() else "cpu")
+        compute_type = os.environ.get("WHISPER_COMPUTE_TYPE", "float16" if device == "cuda" else "int8")
         _model = WhisperModel(model_size, device=device, compute_type=compute_type)
     return _model
 
