@@ -24,6 +24,7 @@
           Drop an audio file here, or <span id="browse-link">browse</span>
         </div>
         <div class="drop-zone-filename" id="drop-zone-filename"></div>
+        <div class="drop-zone-info" id="drop-zone-info"></div>
         <input type="file" id="file-input" accept="audio/*" />
       </div>
       <div id="selected-filename"></div>
@@ -37,6 +38,11 @@
           <span id="transcribe-label">Transcribe</span>
           <span id="transcribe-spinner" class="spinner hidden"></span>
         </button>
+      </div>
+
+      <div id="upload-progress" class="progress-wrap hidden">
+        <div class="progress-track"><div class="progress-fill"></div></div>
+        <div class="progress-label">Transcribing — this may take a few minutes…</div>
       </div>
 
       <div id="upload-error" class="alert alert-error hidden"></div>
@@ -65,6 +71,7 @@
     </div>
   </div>
 
+  <div class="toast-stack" id="toast-stack"></div>
   <script src="/static/app.js"></script>
 </body>
 </html>

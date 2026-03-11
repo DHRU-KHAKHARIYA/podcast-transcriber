@@ -151,6 +151,7 @@ if (document.getElementById("drop-zone")) {
 
   const dropZoneIcon = document.getElementById("drop-zone-icon");
   const dropZoneFilename = document.getElementById("drop-zone-filename");
+  const dropZoneInfo = document.getElementById("drop-zone-info");
 
   function setFile(f) {
     selectedFile = f;
@@ -159,10 +160,21 @@ if (document.getElementById("drop-zone")) {
       dropZone.classList.add("has-file");
       dropZoneIcon.textContent = "✅";
       dropZoneFilename.textContent = f.name;
+      const sizeStr = f.size < 1024 * 1024
+        ? (f.size / 1024).toFixed(1) + " KB"
+        : (f.size / (1024 * 1024)).toFixed(1) + " MB";
+      dropZoneInfo.textContent = sizeStr;
+      const tmpAudio = new Audio(URL.createObjectURL(f));
+      tmpAudio.addEventListener("loadedmetadata", () => {
+        dropZoneInfo.textContent = sizeStr + " · " + fmtDuration(tmpAudio.duration);
+        URL.revokeObjectURL(tmpAudio.src);
+      });
+      tmpAudio.addEventListener("error", () => URL.revokeObjectURL(tmpAudio.src));
     } else {
       dropZone.classList.remove("has-file");
       dropZoneIcon.textContent = "📂";
       dropZoneFilename.textContent = "";
+      dropZoneInfo.textContent = "";
     }
   }
 
@@ -185,16 +197,14 @@ if (document.getElementById("drop-zone")) {
   // Transcribe
   transcribeBtn.addEventListener("click", async () => {
     if (!selectedFile) return;
-    const errEl = document.getElementById("upload-error");
-    const okEl = document.getElementById("upload-success");
-    errEl.classList.add("hidden");
-    okEl.classList.add("hidden");
 
     const label = document.getElementById("transcribe-label");
     const spinner = document.getElementById("transcribe-spinner");
+    const progressWrap = document.getElementById("upload-progress");
     transcribeBtn.disabled = true;
     label.textContent = "Transcribing…";
     spinner.classList.remove("hidden");
+    progressWrap.classList.remove("hidden");
 
     const fd = new FormData();
     fd.append("file", selectedFile);
@@ -204,16 +214,15 @@ if (document.getElementById("drop-zone")) {
     transcribeBtn.disabled = false;
     label.textContent = "Transcribe";
     spinner.classList.add("hidden");
+    progressWrap.classList.add("hidden");
 
     if (!res) return;
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
-      errEl.textContent = data.detail || "Transcription failed";
-      errEl.classList.remove("hidden");
+      showToast(data.detail || "Transcription failed", "error");
       return;
     }
-    okEl.textContent = "Transcription complete! Saved to your history.";
-    okEl.classList.remove("hidden");
+    showToast("Transcription complete! Saved to your history.", "success");
     setFile(null);
     fileInput.value = "";
     loadTranscriptions();
@@ -223,6 +232,16 @@ if (document.getElementById("drop-zone")) {
   const tbody = document.getElementById("transcriptions-body");
 
   async function loadTranscriptions() {
+    tbody.innerHTML = [0, 1, 2].map(() => `
+      <tr>
+        <td><div class="skeleton" style="width:55%"></div></td>
+        <td><div class="skeleton" style="width:24px"></div></td>
+        <td><div class="skeleton" style="width:40px"></div></td>
+        <td><div class="skeleton" style="width:80px"></div></td>
+        <td><div class="skeleton" style="width:64px"></div></td>
+      </tr>
+    `).join("");
+
     const res = await apiFetch("/transcriptions");
     if (!res) return;
     const list = await res.json();
@@ -232,7 +251,10 @@ if (document.getElementById("drop-zone")) {
     }
     tbody.innerHTML = list.map(r => `
       <tr>
-        <td><a class="filename-link" href="/static/detail.html?id=${r.id}">${escHtml(r.filename.replace(/\.[^.]+$/, ""))}</a></td>
+        <td>
+          <a class="filename-link" href="/static/detail.html?id=${r.id}">${escHtml(r.filename.replace(/\.[^.]+$/, ""))}</a>
+          <span class="badge badge-done" style="margin-left:8px">Done</span>
+        </td>
         <td>${r.number_of_speakers}</td>
         <td>${fmtDuration(r.duration_seconds)}</td>
         <td>${fmtDate(r.created_at)}</td>
@@ -313,24 +335,51 @@ if (document.getElementById("transcript")) {
       transcriptEl.innerHTML = '<p class="text-muted">No segments found.</p>';
       return;
     }
-    transcriptEl.innerHTML = data.segments.map(s => `
-      <div class="segment">
-        <div class="segment-meta">
-          <span class="segment-speaker" data-speaker="${escHtml(s.speaker)}">${escHtml(s.speaker)}</span>
-          &nbsp;·&nbsp; <span class="segment-time">${fmtTimestamp(s.start)} – ${fmtTimestamp(s.end)}</span>
-        </div>
-        <div class="segment-text" contenteditable="true" spellcheck="false">${escHtml(s.text)}</div>
-      </div>
-    `).join("");
 
     const speakers = [...new Set(data.segments.map(s => s.speaker))].sort();
+    const speakerColorIdx = {};
+    speakers.forEach((sp, i) => { speakerColorIdx[sp] = i % 6; });
+
+    transcriptEl.innerHTML = data.segments.map((s, i) => {
+      const spIdx = speakerColorIdx[s.speaker] ?? 0;
+      return `
+        <div class="segment" data-sp="${spIdx}" data-start="${s.start}" data-end="${s.end}" style="animation-delay:${i * 0.04}s">
+          <div class="segment-meta">
+            <span class="segment-speaker" data-speaker="${escHtml(s.speaker)}">${escHtml(s.speaker)}</span>
+            &nbsp;·&nbsp; <span class="segment-time">${fmtTimestamp(s.start)} – ${fmtTimestamp(s.end)}</span>
+          </div>
+          <div class="segment-text" contenteditable="true" spellcheck="false">${escHtml(s.text)}</div>
+        </div>
+      `;
+    }).join("");
+
+    // Click segment-meta → seek audio
+    transcriptEl.addEventListener("click", e => {
+      const meta = e.target.closest(".segment-meta");
+      if (!meta) return;
+      const seg = meta.closest(".segment");
+      if (!seg || !audioPlayer.src) return;
+      audioPlayer.currentTime = parseFloat(seg.dataset.start);
+      audioPlayer.play();
+    });
+
+    // Highlight active segment while audio plays
+    audioPlayer.addEventListener("timeupdate", () => {
+      const t = audioPlayer.currentTime;
+      transcriptEl.querySelectorAll(".segment").forEach(seg => {
+        const start = parseFloat(seg.dataset.start);
+        const end = parseFloat(seg.dataset.end);
+        seg.classList.toggle("active", t >= start && t < end);
+      });
+    });
+
     const panel = document.getElementById("speakers-panel");
     panel.innerHTML = `
       <div class="speakers-panel">
         <div class="speakers-panel-label">Rename speakers</div>
         <div class="speakers-panel-inputs">
           ${speakers.map(s => `
-            <div class="speaker-chip">
+            <div class="speaker-chip" data-sp="${speakerColorIdx[s] ?? 0}">
               <div class="speaker-chip-tag">${escHtml(s)}</div>
               <input class="speaker-name-input" type="text" placeholder="Enter name…" data-speaker="${escHtml(s)}" />
             </div>
@@ -360,4 +409,17 @@ function escHtml(str) {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
+}
+
+function showToast(msg, type = "success") {
+  const stack = document.getElementById("toast-stack");
+  if (!stack) return;
+  const el = document.createElement("div");
+  el.className = `toast toast-${type}`;
+  el.textContent = msg;
+  stack.appendChild(el);
+  setTimeout(() => {
+    el.style.animation = "toastIn 0.2s ease reverse both";
+    el.addEventListener("animationend", () => el.remove());
+  }, 3500);
 }
