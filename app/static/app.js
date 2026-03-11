@@ -195,13 +195,23 @@ if (document.getElementById("drop-zone")) {
   });
 
   // Transcribe
+  const cancelBtn = document.getElementById("cancel-btn");
+  let activeAbortController = null;
+
+  cancelBtn.addEventListener("click", () => {
+    if (activeAbortController) activeAbortController.abort();
+  });
+
   transcribeBtn.addEventListener("click", async () => {
     if (!selectedFile) return;
 
     const label = document.getElementById("transcribe-label");
     const spinner = document.getElementById("transcribe-spinner");
     const progressWrap = document.getElementById("upload-progress");
+
+    activeAbortController = new AbortController();
     transcribeBtn.disabled = true;
+    cancelBtn.classList.remove("hidden");
     label.textContent = "Transcribing…";
     spinner.classList.remove("hidden");
     progressWrap.classList.remove("hidden");
@@ -210,11 +220,28 @@ if (document.getElementById("drop-zone")) {
     fd.append("file", selectedFile);
     fd.append("number_of_speakers", document.getElementById("speaker-count").value);
 
-    const res = await apiUpload(fd);
-    transcribeBtn.disabled = false;
-    label.textContent = "Transcribe";
-    spinner.classList.add("hidden");
-    progressWrap.classList.add("hidden");
+    let res;
+    try {
+      const token = getToken();
+      const headers = token ? { "Authorization": "Bearer " + token } : {};
+      res = await fetch("/transcribe", {
+        method: "POST", headers, body: fd,
+        signal: activeAbortController.signal,
+      });
+      if (res.status === 401) { clearToken(); window.location.href = "/static/index.html"; return; }
+    } catch (err) {
+      if (err.name === "AbortError") {
+        showToast("Transcription cancelled.", "error");
+      }
+      res = null;
+    } finally {
+      activeAbortController = null;
+      transcribeBtn.disabled = false;
+      cancelBtn.classList.add("hidden");
+      label.textContent = "Transcribe";
+      spinner.classList.add("hidden");
+      progressWrap.classList.add("hidden");
+    }
 
     if (!res) return;
     if (!res.ok) {
@@ -253,7 +280,6 @@ if (document.getElementById("drop-zone")) {
       <tr>
         <td>
           <a class="filename-link" href="/static/detail.html?id=${r.id}">${escHtml(r.filename.replace(/\.[^.]+$/, ""))}</a>
-          <span class="badge badge-done" style="margin-left:8px">Done</span>
         </td>
         <td>${r.number_of_speakers}</td>
         <td>${fmtDuration(r.duration_seconds)}</td>
@@ -363,14 +389,32 @@ if (document.getElementById("transcript")) {
       audioPlayer.play();
     });
 
+    // Auto-scroll toggle
+    let autoScroll = false;
+    let lastActiveSeg = null;
+    const autoScrollBtn = document.getElementById("autoscroll-btn");
+    autoScrollBtn.addEventListener("click", () => {
+      autoScroll = !autoScroll;
+      autoScrollBtn.textContent = `Auto-scroll: ${autoScroll ? "On" : "Off"}`;
+      autoScrollBtn.style.color = autoScroll ? "var(--accent-light)" : "";
+      autoScrollBtn.style.borderColor = autoScroll ? "var(--accent-light)" : "";
+    });
+
     // Highlight active segment while audio plays
     audioPlayer.addEventListener("timeupdate", () => {
       const t = audioPlayer.currentTime;
+      let active = null;
       transcriptEl.querySelectorAll(".segment").forEach(seg => {
         const start = parseFloat(seg.dataset.start);
         const end = parseFloat(seg.dataset.end);
-        seg.classList.toggle("active", t >= start && t < end);
+        const isActive = t >= start && t < end;
+        seg.classList.toggle("active", isActive);
+        if (isActive) active = seg;
       });
+      if (autoScroll && active && active !== lastActiveSeg) {
+        lastActiveSeg = active;
+        active.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
     });
 
     const panel = document.getElementById("speakers-panel");
@@ -395,6 +439,74 @@ if (document.getElementById("transcript")) {
           el.textContent = name;
         });
       });
+    });
+
+    // Collect current segment state from DOM
+    function collectSegments() {
+      return [...transcriptEl.querySelectorAll(".segment")].map(seg => ({
+        speaker: seg.querySelector(".segment-speaker").textContent,
+        start: parseFloat(seg.dataset.start),
+        end: parseFloat(seg.dataset.end),
+        text: seg.querySelector(".segment-text").textContent.trim(),
+      }));
+    }
+
+    // Save edits
+    document.getElementById("save-btn").addEventListener("click", async () => {
+      const saveBtn = document.getElementById("save-btn");
+      saveBtn.disabled = true;
+      saveBtn.textContent = "Saving…";
+      const res = await apiFetch(`/transcriptions/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ segments: collectSegments() }),
+      });
+      saveBtn.disabled = false;
+      saveBtn.textContent = "Save edits";
+      if (!res || !res.ok) {
+        showToast("Failed to save edits.", "error");
+      } else {
+        showToast("Transcript saved.", "success");
+      }
+    });
+
+    // Export helpers
+    function toSrtTime(secs) {
+      const h = Math.floor(secs / 3600);
+      const m = Math.floor((secs % 3600) / 60);
+      const s = Math.floor(secs % 60);
+      const ms = Math.round((secs % 1) * 1000);
+      return `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")},${String(ms).padStart(3,"0")}`;
+    }
+
+    function triggerDownload(content, filename, type) {
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob([content], { type }));
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    }
+
+    const exportBtn = document.getElementById("export-btn");
+    const exportMenu = document.getElementById("export-menu");
+
+    exportBtn.addEventListener("click", e => {
+      e.stopPropagation();
+      exportMenu.classList.toggle("hidden");
+    });
+    document.addEventListener("click", () => exportMenu.classList.add("hidden"));
+
+    document.getElementById("export-txt").addEventListener("click", () => {
+      const segs = collectSegments();
+      const lines = segs.map(s => `[${fmtTimestamp(s.start)}] ${s.speaker}: ${s.text}`);
+      triggerDownload(lines.join("\n\n"), data.filename.replace(/\.[^.]+$/, "") + ".txt", "text/plain");
+    });
+
+    document.getElementById("export-srt").addEventListener("click", () => {
+      const segs = collectSegments();
+      const lines = segs.map((s, i) =>
+        `${i + 1}\n${toSrtTime(s.start)} --> ${toSrtTime(s.end)}\n${s.speaker}: ${s.text}`
+      );
+      triggerDownload(lines.join("\n\n"), data.filename.replace(/\.[^.]+$/, "") + ".srt", "text/plain");
     });
   });
 }

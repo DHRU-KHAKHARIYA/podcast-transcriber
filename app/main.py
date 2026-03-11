@@ -185,6 +185,26 @@ def get_transcription(
     )
 
 
+class UpdateSegmentsRequest(BaseModel):
+    segments: List[SegmentResponse]
+
+
+@app.patch("/transcriptions/{tid}", status_code=status.HTTP_204_NO_CONTENT)
+def update_transcription(
+    tid: int,
+    req: UpdateSegmentsRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    row = db.query(Transcription).filter(
+        Transcription.id == tid, Transcription.user_id == current_user.id
+    ).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Not found")
+    row.segments_json = json.dumps([s.model_dump() for s in req.segments])
+    db.commit()
+
+
 @app.delete("/transcriptions/{tid}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_transcription(
     tid: int,
