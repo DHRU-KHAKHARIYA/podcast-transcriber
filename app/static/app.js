@@ -277,26 +277,35 @@ if (document.getElementById("drop-zone")) {
       return;
     }
     tbody.innerHTML = list.map(r => `
-      <tr>
+      <tr id="row-${r.id}">
         <td>
           <a class="filename-link" href="/static/detail.html?id=${r.id}">${escHtml(r.filename.replace(/\.[^.]+$/, ""))}</a>
         </td>
         <td>${r.number_of_speakers}</td>
         <td>${fmtDuration(r.duration_seconds)}</td>
         <td>${fmtDate(r.created_at)}</td>
-        <td class="actions">
-          <button class="btn btn-danger" onclick="deleteTranscription(${r.id})">Delete</button>
+        <td class="actions" id="actions-${r.id}">
+          <button class="btn btn-danger btn-sm" onclick="confirmDelete(${r.id})">Delete</button>
         </td>
       </tr>
     `).join("");
   }
 
-  window.viewDetail = function(id) {
-    window.location.href = `/static/detail.html?id=${id}`;
+  window.confirmDelete = function(id) {
+    const cell = document.getElementById(`actions-${id}`);
+    cell.innerHTML = `
+      <span style="font-size:0.8rem;color:var(--text-muted);margin-right:6px">Sure?</span>
+      <button class="btn btn-danger btn-sm" onclick="deleteTranscription(${id})">Yes, delete</button>
+      <button class="btn btn-ghost btn-sm" onclick="cancelDelete(${id})">Cancel</button>
+    `;
+  };
+
+  window.cancelDelete = function(id) {
+    const cell = document.getElementById(`actions-${id}`);
+    cell.innerHTML = `<button class="btn btn-danger btn-sm" onclick="confirmDelete(${id})">Delete</button>`;
   };
 
   window.deleteTranscription = async function(id) {
-    if (!confirm("Delete this transcription?")) return;
     await apiFetch(`/transcriptions/${id}`, { method: "DELETE" });
     loadTranscriptions();
   };
@@ -451,6 +460,25 @@ if (document.getElementById("transcript")) {
       }));
     }
 
+    // Unsaved changes warning
+    let hasUnsavedChanges = false;
+    transcriptEl.addEventListener("input", () => { hasUnsavedChanges = true; });
+    panel.addEventListener("input", () => { hasUnsavedChanges = true; });
+    window.addEventListener("beforeunload", e => {
+      if (hasUnsavedChanges) { e.preventDefault(); e.returnValue = ""; }
+    });
+
+    // Copy transcript to clipboard
+    document.getElementById("copy-btn").addEventListener("click", async () => {
+      const segs = collectSegments();
+      const text = segs.map(s => `[${fmtTimestamp(s.start)}] ${s.speaker}: ${s.text}`).join("\n\n");
+      await navigator.clipboard.writeText(text);
+      const btn = document.getElementById("copy-btn");
+      btn.textContent = "Copied!";
+      btn.style.color = "var(--success)";
+      setTimeout(() => { btn.textContent = "Copy"; btn.style.color = ""; }, 2000);
+    });
+
     // Save edits
     document.getElementById("save-btn").addEventListener("click", async () => {
       const saveBtn = document.getElementById("save-btn");
@@ -465,6 +493,7 @@ if (document.getElementById("transcript")) {
       if (!res || !res.ok) {
         showToast("Failed to save edits.", "error");
       } else {
+        hasUnsavedChanges = false;
         showToast("Transcript saved.", "success");
       }
     });
