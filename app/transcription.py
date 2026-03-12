@@ -1,5 +1,5 @@
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List, Optional
 
 import torch
@@ -11,6 +11,7 @@ class TranscriptSegment:
     start: float
     end: float
     text: str
+    words: List[dict] = field(default_factory=list)  # [{"word", "start", "end"}]
 
 
 _model: Optional[WhisperModel] = None
@@ -28,8 +29,11 @@ def get_model() -> WhisperModel:
 
 def transcribe(audio_path: str) -> List[TranscriptSegment]:
     model = get_model()
-    segments, _ = model.transcribe(audio_path, beam_size=5)
-    return [
-        TranscriptSegment(start=seg.start, end=seg.end, text=seg.text.strip())
-        for seg in segments
-    ]
+    segments, _ = model.transcribe(audio_path, beam_size=5, word_timestamps=True)
+    result = []
+    for seg in segments:
+        words = []
+        if seg.words:
+            words = [{"word": w.word, "start": w.start, "end": w.end} for w in seg.words]
+        result.append(TranscriptSegment(start=seg.start, end=seg.end, text=seg.text.strip(), words=words))
+    return result
